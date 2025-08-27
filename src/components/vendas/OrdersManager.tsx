@@ -45,28 +45,58 @@ export default function OrdersManager() {
   }, []);
 
   const fetchOrders = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select(`
-          *,
-          entities!orders_client_id_fkey(name)
-        `)
-        .order("created_at", { ascending: false });
+  setLoading(true);
+  try {
+    // 1. Busca os pedidos SEM tentar juntar com a tabela de clientes
+    const { data: ordersData, error: ordersError } = await supabase
+      .from("orders")
+      .select(`*`)
+      .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setOrders((data as any) || []);
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar pedidos",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
+    if (ordersError) throw ordersError;
+    if (!ordersData) {
+      setOrders([]);
+      return;
     }
-  };
+
+    // 2. Pega todos os IDs de clientes dos pedidos buscados
+    const clientIds = ordersData.map(order => order.client_id);
+    if (clientIds.length === 0) {
+      setOrders(ordersData as any);
+      setLoading(false);
+      return;
+    }
+    
+    // 3. Busca os nomes de todos esses clientes de uma só vez
+    const { data: entitiesData, error: entitiesError } = await supabase
+      .from("entities")
+      .select('id, name')
+      .in('id', clientIds);
+
+    if (entitiesError) throw entitiesError;
+
+    // 4. Junta os dados no código
+    const ordersWithClientNames = ordersData.map(order => {
+      const entity = entitiesData.find(e => e.id === order.client_id);
+      return {
+        ...order,
+        entities: entity ? { name: entity.name } : null
+      };
+    });
+
+    setOrders((ordersWithClientNames as any) || []);
+
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    toast({
+      title: "Erro",
+      description: "Erro ao carregar pedidos",
+      variant: "destructive"
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir este pedido?")) return;
