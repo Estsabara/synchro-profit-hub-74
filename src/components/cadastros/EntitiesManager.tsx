@@ -81,14 +81,7 @@ export function EntitiesManager() {
     console.log("Formulário submetido:", formData);
 
     const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    toast({
-      title: "Erro",
-      description: "Sessão expirada. Faça login novamente.",
-      variant: "destructive",
-    });
-    return;
-  }
+
     
     try {
       if (editingEntity) {
